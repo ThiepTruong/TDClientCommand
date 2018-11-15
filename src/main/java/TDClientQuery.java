@@ -1,10 +1,21 @@
+import com.google.common.base.Function;
+import com.google.common.base.Throwables;
 import com.treasuredata.client.*;
+import com.treasuredata.client.model.TDJob;
 import com.treasuredata.client.model.TDJobRequest;
+import com.treasuredata.client.model.TDJobSummary;
+import com.treasuredata.client.model.TDResultFormat;
+import org.msgpack.core.MessagePack;
+import org.msgpack.core.MessageUnpacker;
+import org.msgpack.value.ArrayValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.Iterator;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Created by ttruong on 2018-11-12.
@@ -96,5 +107,87 @@ public class TDClientQuery
             jobId = client.submit(TDJobRequest.newHiveQuery(parameter.get(DB).toString(), query));
         }
         return jobId;
+    }
+
+    // Parse parameters provided from command line
+    public HashMap parseCommand(String [] args){
+        HashMap result = new HashMap();
+
+        for (int i = 0; i < args.length; i += 2){
+
+            // Options should start wit '-'
+            if (!args[i].startsWith("-")){
+                logger.error("Option " + args[i] + " should start with '-'");
+                break;
+            }
+
+            // No option or value provided
+            if (args[i].length() < 2){
+                logger.error("Option " + args[i] + " should has lenght greater than 2");
+                break;
+            }
+
+            // parameters into a java hash map
+            result.put(args[i], args[i + 1]);
+        }
+        return result;
+    }
+
+    public String [] stringToArray(String string){
+        return string.split(" ");
+    }
+
+    public boolean executeQuery (TDClient client, String [] cmd){
+        try{
+            update(parseCommand(cmd));
+            String jobId = executeQuery(client,createQuery());
+
+            // Wait until the query finishes
+            ExponentialBackOff backOff = new ExponentialBackOff();
+            TDJobSummary job = client.jobStatus(jobId);
+            while (!job.getStatus().isFinished()) {
+                Thread.sleep(backOff.nextWaitTimeMillis());
+                job = client.jobStatus(jobId);
+            }
+
+            // Read the detailed job information
+            TDJob jobInfo = client.jobInfo(jobId);
+            System.out.println("log:\n" + jobInfo.getCmdOut());
+            System.out.println("error log:\n" + jobInfo.getStdErr());
+            // Read the job results in msgpack.gz format
+            client.jobResult(jobId, TDResultFormat.MESSAGE_PACK_GZ, new Function<InputStream, Integer>()
+            {
+                @Override
+                public Integer apply(InputStream input)
+                {
+                    int count = 0;
+                    try {
+                        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(new GZIPInputStream(input));
+                        while (unpacker.hasNext()) {
+                            // Each row of the query result is array type value (e.g., [1, "name", ...])
+                            ArrayValue array = unpacker.unpackValue().asArrayValue();
+                            System.out.println(array);
+                            count++;
+                        }
+                        unpacker.close();
+                    }
+                    catch (Exception e) {
+                        throw Throwables.propagate(e);
+                    }
+                    return count;
+                }
+            });
+        } catch(Exception e){
+            logger.error("Exception: " + e.toString());
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    public static void main (String [] args){
+        TDClient client = TDClient.newClient();
+        TDClientQuery query = new TDClientQuery();
+        query.executeQuery(client, args);
     }
 }
