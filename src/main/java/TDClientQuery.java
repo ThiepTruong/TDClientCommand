@@ -141,7 +141,6 @@ public class TDClientQuery
         try{
             update(parseCommand(cmd));
             String jobId = executeQuery(client,createQuery());
-
             // Wait until the query finishes
             ExponentialBackOff backOff = new ExponentialBackOff();
             TDJobSummary job = client.jobStatus(jobId);
