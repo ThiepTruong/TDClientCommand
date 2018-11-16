@@ -22,7 +22,7 @@ Put td.conf under <your_folder>\.td\td.conf. Example: C:\Users\ttruong\.td\td.co
 
 Execute query: there are 3 ways
   - There are 2 batch files. You can run query_example.bat in windows command prompt as an example without entering any option or value
-  - You run query.bat <your parameters> in indows command prompt
-  - In windows command prompt, change directory to target then run the query with syntax: java -jar tdclientcommand-1.0-SNAPSHOT-shade.jar <your parameters>
+  - You run query.bat your_parameters in indows command prompt
+  - In windows command prompt, change directory to target then run the query with syntax: java -jar tdclientcommand-1.0-SNAPSHOT-shade.jar your_parameters
   EX: java -jar tdclientcommand-1.0-SNAPSHOT-shade.jar -c items,passed,failed -l 10 -e presto -db automation_data -tb automation_result -m 1510480920 -M 154193046
   
